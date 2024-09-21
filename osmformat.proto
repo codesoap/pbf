@@ -1,0 +1,105 @@
+// Based on https://github.com/openstreetmap/OSM-binary/blob/65e7e976f5c8e47f057a0d921639ea8e6309ef06/osmpbf/osmformat.proto
+
+/** Copyright (c) 2010 Scott A. Crosby. <scott@sacrosby.com>
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to deal in
+the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
+of the Software, and to permit persons to whom the Software is furnished to do
+so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+*/
+
+syntax = "proto2";
+package OSMPBF;
+option go_package = "./pbfproto";
+
+message HeaderBlock {
+  /* Additional tags to aid in parsing this dataset */
+  repeated string required_features = 4;
+  repeated string optional_features = 5;
+}
+
+message PrimitiveBlock {
+  required StringTable stringtable = 1;
+  repeated PrimitiveGroup primitivegroup = 2;
+
+  // Granularity, units of nanodegrees, used to store coordinates in this block.
+  optional int32 granularity = 17 [default=100];
+
+  // Offset value between the output coordinates and the granularity grid in units of nanodegrees.
+  optional int64 lat_offset = 19 [default=0];
+  optional int64 lon_offset = 20 [default=0];
+}
+
+// Group of OSMPrimitives. All primitives in a group must be the same type.
+message PrimitiveGroup {
+  repeated Node nodes = 1;
+  optional DenseNodes dense = 2;
+  repeated Way ways = 3;
+  repeated Relation relations = 4;
+}
+
+message StringTable {
+  repeated bytes s = 1;
+}
+
+message Node {
+  required sint64 id = 1;
+
+  // Parallel arrays.
+  repeated uint32 keys = 2 [packed = true]; // String IDs.
+  repeated uint32 vals = 3 [packed = true]; // String IDs.
+
+  required sint64 lat = 8;
+  required sint64 lon = 9;
+}
+
+message DenseNodes {
+  repeated sint64 id = 1 [packed = true]; // DELTA coded
+
+  repeated sint64 lat = 8 [packed = true]; // DELTA coded
+  repeated sint64 lon = 9 [packed = true]; // DELTA coded
+
+  // Special packing of keys and vals into one array. May be empty if all nodes in this block are tagless.
+  repeated int32 keys_vals = 10 [packed = true];
+}
+
+message Way {
+  required int64 id = 1;
+
+  // Parallel arrays.
+  repeated uint32 keys = 2 [packed = true];
+  repeated uint32 vals = 3 [packed = true];
+
+  repeated sint64 refs = 8 [packed = true]; // DELTA coded
+}
+
+message Relation {
+  enum MemberType {
+    NODE = 0;
+    WAY = 1;
+    RELATION = 2;
+  }
+
+  required int64 id = 1;
+
+  // Parallel arrays.
+  repeated uint32 keys = 2 [packed = true];
+  repeated uint32 vals = 3 [packed = true];
+
+  // Parallel arrays
+  repeated int32 roles_sid = 8 [packed = true]; // This should have been defined as uint32 for consistency, but it is now too late to change it
+  repeated sint64 memids = 9 [packed = true]; // DELTA encoded
+  repeated MemberType types = 10 [packed = true];
+}

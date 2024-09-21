@@ -1,0 +1,44 @@
+// Based on https://github.com/openstreetmap/OSM-binary/blob/65e7e976f5c8e47f057a0d921639ea8e6309ef06/osmpbf/fileformat.proto
+
+/** Copyright (c) 2010 Scott A. Crosby. <scott@sacrosby.com>
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to deal in
+the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
+of the Software, and to permit persons to whom the Software is furnished to do
+so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+*/
+
+
+syntax = "proto2";
+package OSMPBF;
+option go_package = "./pbfproto";
+
+message BlobHeader {
+  required string type = 1;
+  // Not needed for now: optional bytes indexdata = 2;
+  required int32 datasize = 3;
+}
+
+message Blob {
+  optional int32 raw_size = 2; // When compressed, the uncompressed size
+  oneof data {
+    bytes raw = 1;                                   // No compression
+    bytes zlib_data = 3;                             // Possible compressed versions of the data.
+    bytes lzma_data = 4;                             // For LZMA compressed data (optional)
+    bytes OBSOLETE_bzip2_data = 5 [deprecated=true]; // Formerly used for bzip2 compressed data. Deprecated in 2010.
+    bytes lz4_data = 6;                              // For LZ4 compressed data (optional)
+    bytes zstd_data = 7;                             // For ZSTD compressed data (optional)
+  }
+}
