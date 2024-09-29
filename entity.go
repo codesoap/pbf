@@ -12,12 +12,9 @@ type Entity interface {
 }
 
 type Entities struct {
-	Nodes               map[int64]Node     // Nodes by their ID.
-	Ways                map[int64]Way      // Ways by their ID.
-	Relations           map[int64]Relation // Relations by their ID.
-	AncilliaryNodes     map[int64]Node     // Nodes by their ID.
-	AncilliaryWays      map[int64]Way      // Ways by their ID.
-	AncilliaryRelations map[int64]Relation // Relations by their ID.
+	Nodes     map[int64]Node     // Nodes by their ID.
+	Ways      map[int64]Way      // Ways by their ID.
+	Relations map[int64]Relation // Relations by their ID.
 
 	// Internal fields that improve performance during parsing:
 	memo *primitiveGroupMemo

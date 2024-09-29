@@ -3,8 +3,6 @@ package pbf
 //go:generate protoc fileformat.proto --go_out=. --go-vtproto_out=. --go-vtproto_opt=features=unmarshal
 //go:generate protoc osmformat.proto --go_out=. --go-vtproto_out=. --go-vtproto_opt=features=unmarshal+pool --go-vtproto_opt=pool=./pbfproto.PrimitiveBlock --go-vtproto_opt=pool=./pbfproto.PrimitiveGroup --go-vtproto_opt=pool=./pbfproto.Way --go-vtproto_opt=pool=./pbfproto.DenseNodes --go-vtproto_opt=pool=./pbfproto.Node --go-vtproto_opt=pool=./pbfproto.Relation
 
-import "fmt"
-
 type Filter struct {
 	// Location filters results by geographic location. If it is nil, this
 	// filter is inactive.
@@ -31,13 +29,6 @@ type Filter struct {
 	// relations, where only some of their nodes lay within Location. This
 	// can improve performance.
 	ExcludePartial bool
-
-	// If FindAncilliary is true, ancilliary nodes and ways will be
-	// searched. These nodes and ways may not match the filters, but are
-	// part of ways and relations that do match the filters.
-	//
-	// Has no effect, if ExcludePartial is true.
-	FindAncilliary bool
 }
 
 // LocationFilter is a function that takes a latitude and longitude in
@@ -65,21 +56,13 @@ type groupInfo struct {
 // match filter.
 func ExtractEntities(pbfFile string, filter Filter) (Entities, error) {
 	entities := Entities{
-		Nodes:               make(map[int64]Node),
-		Ways:                make(map[int64]Way),
-		Relations:           make(map[int64]Relation),
-		AncilliaryNodes:     make(map[int64]Node),
-		AncilliaryWays:      make(map[int64]Way),
-		AncilliaryRelations: make(map[int64]Relation),
+		Nodes:     make(map[int64]Node),
+		Ways:      make(map[int64]Way),
+		Relations: make(map[int64]Relation),
 	}
 	err := entities.fillMatchingFilter(pbfFile, filter)
 	if err != nil {
 		return entities, err
-	}
-	if !filter.ExcludePartial && filter.FindAncilliary {
-		// TODO
-		return entities, fmt.Errorf(
-			"finding ancilliary entities is not yet implemented")
 	}
 	entities.memo = nil // Free up memory before returning the entities.
 	return entities, nil
