@@ -35,6 +35,9 @@ type Filter struct {
 // nanodegrees and returns true if the given coordinates match a filter.
 type LocationFilter func(lat, lon int64) bool
 
+// primitiveGroupMemo stores information about where entities can be
+// found in a PBF file. It is unused for now, but might prove useful in
+// future features, where the PBF file is read in multiple passes..
 type primitiveGroupMemo struct {
 	groupInfos []groupInfo
 }
