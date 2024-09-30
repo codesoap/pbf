@@ -51,9 +51,9 @@ go install github.com/planetscale/vtprotobuf/cmd/protoc-gen-go-vtproto@v0.6.0
 ```
 
 # Ideas for the Future
-For now, ways and relations will be incomplete, if they only
-partially lie within the location filter. This is undesirable, for
-example, when trying to render an extracted area as an image. Thus
-it would be useful to have a flag that makes the library return
-"ancillary entities". An idea for the interface can be found at commit
-9b673e35bd0510e4ad53a2875dcf4a7ea4ca085a.
+For now, ways and relations will be incomplete, if they only partially
+lie within the location filter or their members didn't match the tag
+filter. This is undesirable, for example, when trying to render an
+extracted area as an image. Thus it would be useful to have a flag that
+makes the library return "ancillary entities". An idea for the interface
+can be found at commit 9b673e35bd0510e4ad53a2875dcf4a7ea4ca085a.
