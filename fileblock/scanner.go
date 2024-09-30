@@ -9,10 +9,8 @@ import (
 	"github.com/codesoap/pbf/pbfproto"
 )
 
-const (
-	// See https://wiki.openstreetmap.org/wiki/PBF_Format#File_format
-	maxBlobHeaderSize = 64 * 1024 * 1024
-)
+// See https://wiki.openstreetmap.org/wiki/PBF_Format#File_format
+const maxBlobHeaderSize = 64 * 1024 * 1024
 
 // Scanner allows reading fileblocks from PBF files, one at a time.
 type Scanner struct {

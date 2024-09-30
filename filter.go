@@ -26,21 +26,20 @@ type block struct {
 }
 
 type decodeResult struct {
-	res block
+	val block
 	err error
 }
 
-// fillMatchingFilter stores all nodes matching filter, all ways
-// containing at least one of these nodes and all relations containing
-// one of these nodes, ways or other relations that contain such nodes
-// or ways.
+// fillInMatches stores all nodes matching filter, all ways containing
+// at least one of these nodes and all relations containing one of these
+// nodes, ways or other relations that contain such nodes or ways.
 //
 // In the process, a primitiveGroupMemo is created. This memo helps find
 // unmatched entities quicker in the PBF file, if needed later.
 //
 // This function uses the fact that nodes always come before ways with
 // the Sort.Type_then_ID feature.
-func (e *Entities) fillMatchingFilter(pbfFile string, filter Filter) error {
+func (e *Entities) fillInMatches(pbfFile string, filter Filter) error {
 	e.memo = &primitiveGroupMemo{}
 	file, err := os.Open(pbfFile)
 	if err != nil {
@@ -76,8 +75,8 @@ func (e *Entities) fillMatchingFilter(pbfFile string, filter Filter) error {
 					dataDecoder.DiscardWork()
 					return err
 				}
-				err := e.fillInLocation(res.res, filter)
-				res.res.b.ReturnToVTPool()
+				err := e.fillInLocation(res.val, filter)
+				res.val.b.ReturnToVTPool()
 				if err != nil {
 					dataDecoder.Stop()
 					dataDecoder.DiscardWork()
@@ -91,21 +90,21 @@ func (e *Entities) fillMatchingFilter(pbfFile string, filter Filter) error {
 			break
 		}
 	}
-	err = removeUndesiredSuperRelations(e, filter.ExcludePartial)
+	err = e.removeUndesiredSuperRelations(filter.ExcludePartial)
 	if err != nil {
 		return err
 	}
-	filterByTags(e, filter.Tags)
+	e.filterByTags(filter.Tags)
 	return nil
 }
 
 func channelResults(dataDecoder *lineworker.WorkerPool[blob, block], results chan decodeResult) {
 	for {
-		res, err := dataDecoder.Next()
+		val, err := dataDecoder.Next()
 		if err == lineworker.EOS {
 			break
 		}
-		results <- decodeResult{res: res, err: err}
+		results <- decodeResult{val: val, err: err}
 	}
 	close(results)
 }
@@ -114,7 +113,7 @@ func feedBlobs(file *os.File, dataDecoder *lineworker.WorkerPool[blob, block], e
 	defer func() { close(errs) }()
 	defer dataDecoder.Stop()
 	scanner := fileblock.NewScanner(file)
-	for i := 0; ; i++ {
+	for {
 		ok := scanner.Scan()
 		if !ok {
 			if scanner.Err() != nil {
@@ -150,26 +149,26 @@ func ensureCompatibility(b *pbfproto.Blob) error {
 	}
 	for _, feature := range headerBlock.RequiredFeatures {
 		if feature != "OsmSchema-V0.6" && feature != "DenseNodes" {
-			return fmt.Errorf("unsuported feature '%s' is required", feature)
+			return fmt.Errorf("unsuported feature '%s' is required by PBF file", feature)
 		}
 	}
-	typeThenIDFeature := false
+	typeAndIDSortFeature := false
 	for _, feature := range headerBlock.OptionalFeatures {
 		if feature == "Sort.Type_then_ID" {
-			typeThenIDFeature = true
+			typeAndIDSortFeature = true
 			break
 		}
 	}
-	if !typeThenIDFeature {
-		return fmt.Errorf("required feature 'Sort.Type_then_ID' is missing")
+	if !typeAndIDSortFeature {
+		return fmt.Errorf("required feature 'Sort.Type_then_ID' is missing from PBF file")
 	}
 	return nil
 }
 
 // fillInLocation fills entities with all entities matching loc.
-// Relations that have another relation as a member, are also filled in.
+// Relations, that have another relation as a member, are also filled
+// in; they will be evaluated later in removeUndesiredSuperRelations.
 func (e *Entities) fillInLocation(b block, filter Filter) error {
-	// Maybe even skip parsing stringtable if threre are no matching entitie
 	groups := b.b.Primitivegroup
 	for _, group := range groups {
 		gi := groupInfo{
@@ -179,6 +178,7 @@ func (e *Entities) fillInLocation(b block, filter Filter) error {
 			containsWays:      len(group.Ways) > 0,
 			containsRelations: len(group.Relations) > 0,
 		}
+		e.memo.groupInfos = append(e.memo.groupInfos, gi)
 		if gi.containsNodes {
 			nodes := extractNodes(b.b, group, filter.Location, &gi)
 			for _, node := range nodes {
@@ -195,7 +195,6 @@ func (e *Entities) fillInLocation(b block, filter Filter) error {
 				e.Relations[relation.id] = relation
 			}
 		}
-		e.memo.groupInfos = append(e.memo.groupInfos, gi)
 	}
 	return nil
 }
@@ -247,7 +246,7 @@ func extractDenseNodes(b *pbfproto.PrimitiveBlock, group *pbfproto.PrimitiveGrou
 		}
 		scaledLat := realLat*granularity + latOffset
 		scaledLon := realLon*granularity + lonOffset
-		if !loc(scaledLat, scaledLon) {
+		if loc != nil && !loc(scaledLat, scaledLon) {
 			// Skip tags of unused node:
 			for ; iKeyVal < len(dense.KeysVals); iKeyVal++ {
 				iKeyVal++
@@ -304,7 +303,7 @@ func extractRegularNodes(b *pbfproto.PrimitiveBlock, group *pbfproto.PrimitiveGr
 		}
 		scaledLat := *node.Lat*granularity + latOffset
 		scaledLon := *node.Lon*granularity + lonOffset
-		if !loc(scaledLat, scaledLon) {
+		if loc != nil && !loc(scaledLat, scaledLon) {
 			continue
 		}
 		tags := make(map[string]string)
@@ -423,12 +422,12 @@ func isIrrelevantRelation(relation Relation, nodes map[int64]Node, ways map[int6
 	return true
 }
 
-// removeUndesiredSuperRelations removes relations from entities which
-// do not reference a "physical" relation (one which only contains ways
-// and/or nodes) in entities.Relations directly or indirectly.
-func removeUndesiredSuperRelations(entities *Entities, excludePartial bool) error {
+// removeUndesiredSuperRelations removes relations from e which do not
+// reference a "physical" relation (one which only contains ways and/or
+// nodes) in entities.Relations directly or indirectly.
+func (e *Entities) removeUndesiredSuperRelations(excludePartial bool) error {
 	relationsToCheck := make([]int64, 0)
-	for id, relation := range entities.Relations {
+	for id, relation := range e.Relations {
 		if len(relation.relations) > 0 {
 			relationsToCheck = append(relationsToCheck, id)
 		}
@@ -436,7 +435,7 @@ func removeUndesiredSuperRelations(entities *Entities, excludePartial bool) erro
 	for len(relationsToCheck) > 0 {
 		remainingRelationsToCheck := make([]int64, 0)
 		for _, relationID := range relationsToCheck {
-			relation := entities.Relations[relationID]
+			relation := e.Relations[relationID]
 			canCheck := true
 			for _, childRelation := range relation.relations {
 				if slices.Contains(relationsToCheck, childRelation) {
@@ -445,35 +444,9 @@ func removeUndesiredSuperRelations(entities *Entities, excludePartial bool) erro
 					break
 				}
 			}
-			if canCheck {
-				shouldRemain := false
-				for _, childRelation := range relation.relations {
-					if _, ok := entities.Relations[childRelation]; ok {
-						shouldRemain = true
-						break
-					} else if excludePartial {
-						break
-					}
-				}
-				if !shouldRemain && !excludePartial {
-					for _, way := range relation.ways {
-						if _, ok := entities.Ways[way]; ok {
-							shouldRemain = true
-							break
-						}
-					}
-				}
-				if !shouldRemain && !excludePartial {
-					for _, node := range relation.nodes {
-						if _, ok := entities.Nodes[node]; ok {
-							shouldRemain = true
-							break
-						}
-					}
-				}
-				if !shouldRemain {
-					delete(entities.Relations, relationID)
-				}
+			if canCheck && (excludePartial && !e.containsAllMembers(relation) ||
+				!excludePartial && !e.containsAtLeastOneMember(relation)) {
+				delete(e.Relations, relationID)
 			}
 		}
 		if len(relationsToCheck) == len(remainingRelationsToCheck) {
@@ -484,20 +457,58 @@ func removeUndesiredSuperRelations(entities *Entities, excludePartial bool) erro
 	return nil
 }
 
-func filterByTags(entities *Entities, wantedTags map[string][]string) {
-	for id, entity := range entities.Nodes {
-		if !tagsMatch(entity.tags, wantedTags) {
-			delete(entities.Nodes, id)
+func (e *Entities) containsAllMembers(r Relation) bool {
+	for _, childRelation := range r.relations {
+		if _, ok := e.Relations[childRelation]; !ok {
+			return false
 		}
 	}
-	for id, entity := range entities.Ways {
-		if !tagsMatch(entity.tags, wantedTags) {
-			delete(entities.Ways, id)
+	for _, way := range r.ways {
+		if _, ok := e.Ways[way]; !ok {
+			return false
 		}
 	}
-	for id, entity := range entities.Relations {
+	for _, node := range r.nodes {
+		if _, ok := e.Nodes[node]; !ok {
+			return false
+		}
+	}
+	return true
+}
+
+func (e *Entities) containsAtLeastOneMember(r Relation) bool {
+	for _, childRelation := range r.relations {
+		if _, ok := e.Relations[childRelation]; ok {
+			return true
+		}
+	}
+	for _, way := range r.ways {
+		if _, ok := e.Ways[way]; ok {
+			return true
+		}
+	}
+	for _, node := range r.nodes {
+		if _, ok := e.Nodes[node]; ok {
+			return true
+		}
+	}
+	return false
+}
+
+func (e *Entities) filterByTags(wantedTags map[string][]string) {
+	for id, entity := range e.Nodes {
 		if !tagsMatch(entity.tags, wantedTags) {
-			delete(entities.Relations, id)
+			delete(e.Nodes, id)
+		}
+	}
+	for id, entity := range e.Ways {
+		if !tagsMatch(entity.tags, wantedTags) {
+			delete(e.Ways, id)
+		}
+	}
+	for id, entity := range e.Relations {
+		if !tagsMatch(entity.tags, wantedTags) {
+			delete(e.Relations, id)
 		}
 	}
 }

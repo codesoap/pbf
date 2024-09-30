@@ -3,6 +3,7 @@ package pbf
 //go:generate protoc fileformat.proto --go_out=. --go-vtproto_out=. --go-vtproto_opt=features=unmarshal
 //go:generate protoc osmformat.proto --go_out=. --go-vtproto_out=. --go-vtproto_opt=features=unmarshal+pool --go-vtproto_opt=pool=./pbfproto.PrimitiveBlock --go-vtproto_opt=pool=./pbfproto.PrimitiveGroup --go-vtproto_opt=pool=./pbfproto.Way --go-vtproto_opt=pool=./pbfproto.DenseNodes --go-vtproto_opt=pool=./pbfproto.Node --go-vtproto_opt=pool=./pbfproto.Relation
 
+// Filter is a filter for OSM entities.
 type Filter struct {
 	// Location filters results by geographic location. If it is nil, this
 	// filter is inactive.
@@ -21,8 +22,8 @@ type Filter struct {
 
 	// The Tags filter will filter entities by their tags. Keys are tags
 	// and values are accepted values. If a value is an empty slice, every
-	// value for this tag is accepted, but at least one value for this tag
-	// must be present.
+	// value for this tag is accepted, but a value for this tag must be
+	// present.
 	Tags map[string][]string
 
 	// If ExcludePartial is true, the filter will not match ways and
@@ -31,13 +32,14 @@ type Filter struct {
 	ExcludePartial bool
 }
 
-// LocationFilter is a function that takes a latitude and longitude in
-// nanodegrees and returns true if the given coordinates match a filter.
+// LocationFilter is a function that takes a latitude and longitude
+// in nanodegrees and returns true if the given coordinates match the
+// filter.
 type LocationFilter func(lat, lon int64) bool
 
 // primitiveGroupMemo stores information about where entities can be
 // found in a PBF file. It is unused for now, but might prove useful in
-// future features, where the PBF file is read in multiple passes..
+// future features, where the PBF file is read in multiple passes.
 type primitiveGroupMemo struct {
 	groupInfos []groupInfo
 }
@@ -55,18 +57,15 @@ type groupInfo struct {
 	minWayID, maxWayID   int64
 }
 
-// ExtractEntities extracts all entities from the given pbfFile that
-// match filter.
+// ExtractEntities extracts all entities matching filter from the given
+// pbfFile.
 func ExtractEntities(pbfFile string, filter Filter) (Entities, error) {
 	entities := Entities{
 		Nodes:     make(map[int64]Node),
 		Ways:      make(map[int64]Way),
 		Relations: make(map[int64]Relation),
 	}
-	err := entities.fillMatchingFilter(pbfFile, filter)
-	if err != nil {
-		return entities, err
-	}
+	err := entities.fillInMatches(pbfFile, filter)
 	entities.memo = nil // Free up memory before returning the entities.
-	return entities, nil
+	return entities, err
 }
