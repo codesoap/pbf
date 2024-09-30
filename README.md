@@ -23,18 +23,18 @@ Find the full documentation of this library at
 ```go
 filter := pbf.Filter{
 	Location: func(lat, lon int64) bool {
-    // A square filter matching the city center of Bremen, Germany.
+		// A square filter matching the city center of Bremen, Germany.
 		return lat >= 53_071_495_496 &&
 			lat <= 53_080_504_504 &&
 			lon >= 8_799_510_372 &&
 			lon <= 8_814_489_628
 	},
-  Tags: map[string][]string{
-    // Find bicycle shops.
-    "shop": {"bicycle"},
-  },
+	Tags: map[string][]string{
+		// Find bicycle shops.
+		"shop": {"bicycle"},
+	},
 }
-# wget https://download.geofabrik.de/europe/germany/bremen-latest.osm.pbf
+// wget https://download.geofabrik.de/europe/germany/bremen-latest.osm.pbf
 results, err := pbf.ExtractEntities("/tmp/bremen-latest.osm.pbf", filter)
 resultCount := len(results.Nodes) + len(results.Ways) + len(results.Relations)
 fmt.Printf("Found %d bicycle shop(s) in the center of Bremen.\n", resultCount)
