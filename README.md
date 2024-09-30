@@ -11,8 +11,10 @@ hardware (e.g. an old ThinkPad T480) PBF files can be read at roughly
 Republic (828MiB), roughly 400MiB of RAM are used.
 
 Performance can be improved slightly, by changing the compression
-inside PBF files to zstd. This can be done with the
-[zstd-pbf tool](https://github.com/codesoap/zstd-pbf).
+inside PBF files to zstd. This can be done with the [zstd-pbf
+tool](https://github.com/codesoap/zstd-pbf). Relaxing the garbage
+collector also leads to noticeable performance improvements at the cost
+of increased memory usage; I recommend trying `debug.SetGCPercent(150)`.
 
 Find the full documentation of this library at
 [godocs.io/github.com/codesoap/pbf](https://godocs.io/github.com/codesoap/pbf).
