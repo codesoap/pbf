@@ -374,9 +374,22 @@ func extractRelations(b *pbfproto.PrimitiveBlock, group *pbfproto.PrimitiveGroup
 	rawRelations := group.Relations
 	relations := make([]Relation, 0)
 	for _, relation := range rawRelations {
-		relationsNodes := make([]int64, 0)
-		relationsWays := make([]int64, 0)
-		childRelations := make([]int64, 0)
+		// Count relation types beforehand to reduce memory allocations:
+		nodeCnt, wayCnt, relCnt := 0, 0, 0
+		for i := range relation.Memids {
+			switch relation.Types[i] {
+			case pbfproto.Relation_NODE:
+				nodeCnt++
+			case pbfproto.Relation_WAY:
+				wayCnt++
+			case pbfproto.Relation_RELATION:
+				relCnt++
+			}
+		}
+
+		relationsNodes := make([]int64, 0, nodeCnt)
+		relationsWays := make([]int64, 0, wayCnt)
+		childRelations := make([]int64, 0, relCnt)
 		for i, memberID := range relation.Memids {
 			switch relation.Types[i] {
 			case pbfproto.Relation_NODE:
