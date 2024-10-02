@@ -1,7 +1,7 @@
 package pbf
 
 //go:generate protoc fileformat.proto --go_out=. --go-vtproto_out=. --go-vtproto_opt=features=unmarshal
-//go:generate protoc osmformat.proto --go_out=. --go-vtproto_out=. --go-vtproto_opt=features=unmarshal+pool --go-vtproto_opt=pool=./pbfproto.PrimitiveBlock --go-vtproto_opt=pool=./pbfproto.PrimitiveGroup --go-vtproto_opt=pool=./pbfproto.Way --go-vtproto_opt=pool=./pbfproto.DenseNodes --go-vtproto_opt=pool=./pbfproto.Node --go-vtproto_opt=pool=./pbfproto.Relation
+//go:generate protoc osmformat.proto --go_out=. --go-vtproto_out=. --go-vtproto_opt=features=unmarshal+pool --go-vtproto_opt=pool=./pbfproto.PrimitiveBlock --go-vtproto_opt=pool=./pbfproto.PrimitiveGroup --go-vtproto_opt=pool=./pbfproto.StringTable --go-vtproto_opt=pool=./pbfproto.Way --go-vtproto_opt=pool=./pbfproto.DenseNodes --go-vtproto_opt=pool=./pbfproto.Node --go-vtproto_opt=pool=./pbfproto.Relation
 
 // Filter is a filter for OSM entities.
 type Filter struct {

@@ -27,6 +27,7 @@ var vtprotoPool_PrimitiveBlock = sync.Pool{
 
 func (m *PrimitiveBlock) ResetVT() {
 	if m != nil {
+		m.Stringtable.ReturnToVTPool()
 		for _, mm := range m.Primitivegroup {
 			mm.ResetVT()
 		}
@@ -80,6 +81,29 @@ func (m *PrimitiveGroup) ReturnToVTPool() {
 }
 func PrimitiveGroupFromVTPool() *PrimitiveGroup {
 	return vtprotoPool_PrimitiveGroup.Get().(*PrimitiveGroup)
+}
+
+var vtprotoPool_StringTable = sync.Pool{
+	New: func() interface{} {
+		return &StringTable{}
+	},
+}
+
+func (m *StringTable) ResetVT() {
+	if m != nil {
+		f0 := m.S[:0]
+		m.Reset()
+		m.S = f0
+	}
+}
+func (m *StringTable) ReturnToVTPool() {
+	if m != nil {
+		m.ResetVT()
+		vtprotoPool_StringTable.Put(m)
+	}
+}
+func StringTableFromVTPool() *StringTable {
+	return vtprotoPool_StringTable.Get().(*StringTable)
 }
 
 var vtprotoPool_Node = sync.Pool{
@@ -368,7 +392,7 @@ func (m *PrimitiveBlock) UnmarshalVT(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			if m.Stringtable == nil {
-				m.Stringtable = &StringTable{}
+				m.Stringtable = StringTableFromVTPool()
 			}
 			if err := m.Stringtable.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 				return err
