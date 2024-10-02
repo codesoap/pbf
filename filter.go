@@ -340,7 +340,7 @@ func extractWays(b *pbfproto.PrimitiveBlock, group *pbfproto.PrimitiveGroup, rea
 			}
 			if !wayIsRelevant {
 				_, wayIsRelevant = realNodes[realNodeID]
-				if excludePartial && !wayIsRelevant {
+				if wayIsRelevant || excludePartial {
 					break
 				}
 			}
