@@ -21,6 +21,10 @@ type Scanner struct {
 	latestBlobStart  int64
 	latestBlobSize   int32 // The size of the blob in the PBF file.
 	latestErr        error
+
+	// Reuse memory to save resources:
+	blobHeaderMem []byte
+	blobMem       []byte
 }
 
 func NewScanner(file *os.File) Scanner {
@@ -42,13 +46,13 @@ func (s *Scanner) Scan() bool {
 		return false
 	}
 
-	rawBlobHeader, err := io.ReadAll(io.LimitReader(s.file, int64(blobHeaderSize)))
+	s.blobHeaderMem, err = readAllIntoBuf(io.LimitReader(s.file, int64(blobHeaderSize)), s.blobHeaderMem)
 	if err != nil {
 		s.latestErr = fmt.Errorf("could not read BlobHeader: %v", err)
 		return false
 	}
 	s.latestBlobHeader = &pbfproto.BlobHeader{}
-	if err = s.latestBlobHeader.UnmarshalVT(rawBlobHeader); err != nil {
+	if err = s.latestBlobHeader.UnmarshalVT(s.blobHeaderMem); err != nil {
 		s.latestErr = fmt.Errorf("could not unmarshal BlobHeader: %v", err)
 		return false
 	}
@@ -79,13 +83,13 @@ func (s *Scanner) Scan() bool {
 		return false
 	}
 	s.latestBlobSize = *s.latestBlobHeader.Datasize
-	rawBlob, err := io.ReadAll(io.LimitReader(s.file, int64(*s.latestBlobHeader.Datasize)))
+	s.blobMem, err = readAllIntoBuf(io.LimitReader(s.file, int64(*s.latestBlobHeader.Datasize)), s.blobMem)
 	if err != nil {
 		s.latestErr = fmt.Errorf("could not read Blob: %v", err)
 		return false
 	}
 	s.latestBlob = &pbfproto.Blob{}
-	if err = s.latestBlob.UnmarshalVT(rawBlob); err != nil {
+	if err = s.latestBlob.UnmarshalVT(s.blobMem); err != nil {
 		s.latestErr = fmt.Errorf("could not unmarshal Blob: %v", err)
 		return false
 	}
@@ -124,4 +128,24 @@ func getBlobHeaderSize(file *os.File) (uint32, error) {
 		return 0, fmt.Errorf("blobHeader size %d >= 64KiB", size)
 	}
 	return size, nil
+}
+
+func readAllIntoBuf(r io.Reader, b []byte) ([]byte, error) {
+	// Code is mostly copied from io.ReadAll.
+	b = b[:0]
+	for {
+		n, err := r.Read(b[len(b):cap(b)])
+		b = b[:len(b)+n]
+		if err != nil {
+			if err == io.EOF {
+				err = nil
+			}
+			return b, err
+		}
+
+		if len(b) == cap(b) {
+			// Add more capacity (let append pick how much).
+			b = append(b, 0)[:len(b)]
+		}
+	}
 }
