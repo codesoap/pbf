@@ -39,15 +39,14 @@ type decodeResult struct {
 //
 // This function uses the fact that nodes always come before ways with
 // the Sort.Type_then_ID feature.
-func (e *Entities) fillInMatches(pbfFile string, filter Filter) error {
-	e.memo = &primitiveGroupMemo{}
+func (e *entityExtractor) fillInMatches(pbfFile string, filter Filter) error {
 	file, err := os.Open(pbfFile)
 	if err != nil {
 		return fmt.Errorf("could not open PBF file '%s': %v", pbfFile, err)
 	}
 
 	decodeBlob := func(in blob) (block, error) {
-		b, err := extractBlock(in.b)
+		b, err := extractBlock(in.b, &e.decompressor)
 		if err != nil {
 			msg := "could not extract PrimitiveGroups from OSMData fileblock: %v"
 			return block{}, fmt.Errorf(msg, err)
@@ -58,7 +57,7 @@ func (e *Entities) fillInMatches(pbfFile string, filter Filter) error {
 
 	errs := make(chan error)
 	results := make(chan decodeResult)
-	go feedBlobs(file, dataDecoder, errs)
+	go e.feedBlobs(file, dataDecoder, errs)
 	go channelResults(dataDecoder, results)
 	for {
 		select {
@@ -90,11 +89,11 @@ func (e *Entities) fillInMatches(pbfFile string, filter Filter) error {
 			break
 		}
 	}
-	err = e.removeUndesiredSuperRelations(filter.ExcludePartial)
+	err = e.entities.removeUndesiredSuperRelations(filter.ExcludePartial)
 	if err != nil {
 		return err
 	}
-	e.filterByTags(filter.Tags)
+	e.entities.filterByTags(filter.Tags)
 	return nil
 }
 
@@ -109,7 +108,7 @@ func channelResults(dataDecoder *lineworker.WorkerPool[blob, block], results cha
 	close(results)
 }
 
-func feedBlobs(file *os.File, dataDecoder *lineworker.WorkerPool[blob, block], errs chan error) {
+func (e *entityExtractor) feedBlobs(file *os.File, dataDecoder *lineworker.WorkerPool[blob, block], errs chan error) {
 	defer func() { close(errs) }()
 	defer dataDecoder.Stop()
 	scanner := fileblock.NewScanner(file)
@@ -123,7 +122,7 @@ func feedBlobs(file *os.File, dataDecoder *lineworker.WorkerPool[blob, block], e
 		}
 		blobHeader := scanner.BlobHeader()
 		if *blobHeader.Type == "OSMHeader" {
-			if err := ensureCompatibility(scanner.Blob()); err != nil {
+			if err := ensureCompatibility(scanner.Blob(), &e.decompressor); err != nil {
 				errs <- fmt.Errorf("PBF file is incompatible: %v", err)
 				break
 			}
@@ -138,9 +137,9 @@ func feedBlobs(file *os.File, dataDecoder *lineworker.WorkerPool[blob, block], e
 	}
 }
 
-func ensureCompatibility(b *pbfproto.Blob) error {
-	data, err := util.ToRawData(b)
-	defer util.ReturnToBlobPool(data)
+func ensureCompatibility(b *pbfproto.Blob, d *util.Decompressor) error {
+	data, err := d.ToRawData(b)
+	defer d.ReturnToBlobPool(data)
 	if err != nil {
 		return fmt.Errorf("could not read blob data: %v", err)
 	}
@@ -169,7 +168,7 @@ func ensureCompatibility(b *pbfproto.Blob) error {
 // fillInLocation fills entities with all entities matching loc.
 // Relations, that have another relation as a member, are also filled
 // in; they will be evaluated later in removeUndesiredSuperRelations.
-func (e *Entities) fillInLocation(b block, filter Filter) error {
+func (e *entityExtractor) fillInLocation(b block, filter Filter) error {
 	groups := b.b.Primitivegroup
 	for _, group := range groups {
 		gi := groupInfo{
@@ -183,26 +182,28 @@ func (e *Entities) fillInLocation(b block, filter Filter) error {
 		if gi.containsNodes {
 			nodes := extractNodes(b.b, group, filter.Location, &gi)
 			for _, node := range nodes {
-				e.Nodes[node.id] = node
+				e.entities.Nodes[node.id] = node
 			}
 		} else if gi.containsWays {
-			ways := extractWays(b.b, group, e.Nodes, filter.ExcludePartial, &gi)
+			ways := extractWays(b.b, group,
+				e.entities.Nodes, filter.ExcludePartial, &gi)
 			for _, way := range ways {
-				e.Ways[way.id] = way
+				e.entities.Ways[way.id] = way
 			}
 		} else if gi.containsRelations {
-			relations := extractRelations(b.b, group, e.Nodes, e.Ways, filter.ExcludePartial)
+			relations := extractRelations(b.b, group,
+				e.entities.Nodes, e.entities.Ways, filter.ExcludePartial)
 			for _, relation := range relations {
-				e.Relations[relation.id] = relation
+				e.entities.Relations[relation.id] = relation
 			}
 		}
 	}
 	return nil
 }
 
-func extractBlock(b *pbfproto.Blob) (*pbfproto.PrimitiveBlock, error) {
-	data, err := util.ToRawData(b)
-	defer util.ReturnToBlobPool(data)
+func extractBlock(b *pbfproto.Blob, d *util.Decompressor) (*pbfproto.PrimitiveBlock, error) {
+	data, err := d.ToRawData(b)
+	defer d.ReturnToBlobPool(data)
 	if err != nil {
 		return nil, fmt.Errorf("could not read blob data: %v", err)
 	}

@@ -12,9 +12,19 @@ import (
 	"github.com/klauspost/compress/zstd"
 )
 
-var blobpool = sync.Pool{New: func() any { return make([]byte, 0, 512) }}
+type Decompressor struct {
+	blobpool        sync.Pool
+	zstdDecoder     *zstd.Decoder
+	zstdDecoderLock sync.Mutex
+}
 
-func ToRawData(blob *pbfproto.Blob) ([]byte, error) {
+func NewDecompressor() Decompressor {
+	return Decompressor{
+		blobpool: sync.Pool{New: func() any { return make([]byte, 0, 512) }},
+	}
+}
+
+func (d *Decompressor) ToRawData(blob *pbfproto.Blob) ([]byte, error) {
 	if blob == nil {
 		return nil, fmt.Errorf("blob is nil")
 	}
@@ -28,7 +38,7 @@ func ToRawData(blob *pbfproto.Blob) ([]byte, error) {
 			return data, fmt.Errorf("could not decompress zlib blob: %v", err)
 		}
 		defer reader.Close()
-		data = blobpool.Get().([]byte)
+		data = d.blobpool.Get().([]byte)
 		if cap(data) < int(*blob.RawSize) {
 			data = make([]byte, *blob.RawSize)
 		} else {
@@ -38,16 +48,18 @@ func ToRawData(blob *pbfproto.Blob) ([]byte, error) {
 			return data, fmt.Errorf("could not decompress zlib blob: %v", err)
 		}
 	case *pbfproto.Blob_ZstdData:
-		// ToRawData is already called concurrently; this is faster:
-		noConcurrency := zstd.WithDecoderConcurrency(1)
-
-		reader, err := zstd.NewReader(nil, noConcurrency)
-		if err != nil {
-			return data, fmt.Errorf("could not decompress zstd blob: %v", err)
+		var err error
+		d.zstdDecoderLock.Lock()
+		if d.zstdDecoder == nil {
+			d.zstdDecoder, err = zstd.NewReader(nil, zstd.WithDecoderConcurrency(0))
+			if err != nil {
+				d.zstdDecoderLock.Unlock()
+				return nil, fmt.Errorf("could not create zstd decoder: %v", err)
+			}
 		}
-		defer reader.Close()
-		data = blobpool.Get().([]byte)[:0]
-		data, err = reader.DecodeAll(blobData.ZstdData, data)
+		d.zstdDecoderLock.Unlock()
+		data = d.blobpool.Get().([]byte)[:0]
+		data, err = d.zstdDecoder.DecodeAll(blobData.ZstdData, data)
 		if err != nil {
 			return data, fmt.Errorf("could not decompress zlib blob: %v", err)
 		}
@@ -57,6 +69,12 @@ func ToRawData(blob *pbfproto.Blob) ([]byte, error) {
 	return data, nil
 }
 
-func ReturnToBlobPool(b []byte) {
-	blobpool.Put(b)
+func (d *Decompressor) ReturnToBlobPool(b []byte) {
+	d.blobpool.Put(b)
+}
+
+func (d *Decompressor) Close() {
+	if d.zstdDecoder != nil {
+		d.zstdDecoder.Close()
+	}
 }

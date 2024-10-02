@@ -1,5 +1,7 @@
 package pbf
 
+import "github.com/codesoap/pbf/util"
+
 //go:generate protoc fileformat.proto --go_out=. --go-vtproto_out=. --go-vtproto_opt=features=unmarshal
 //go:generate protoc osmformat.proto --go_out=. --go-vtproto_out=. --go-vtproto_opt=features=unmarshal+pool --go-vtproto_opt=pool=./pbfproto.PrimitiveBlock --go-vtproto_opt=pool=./pbfproto.PrimitiveGroup --go-vtproto_opt=pool=./pbfproto.StringTable --go-vtproto_opt=pool=./pbfproto.Way --go-vtproto_opt=pool=./pbfproto.DenseNodes --go-vtproto_opt=pool=./pbfproto.Node --go-vtproto_opt=pool=./pbfproto.Relation
 
@@ -37,6 +39,12 @@ type Filter struct {
 // filter.
 type LocationFilter func(lat, lon int64) bool
 
+type entityExtractor struct {
+	entities     Entities
+	memo         primitiveGroupMemo
+	decompressor util.Decompressor
+}
+
 // primitiveGroupMemo stores information about where entities can be
 // found in a PBF file. It is unused for now, but might prove useful in
 // future features, where the PBF file is read in multiple passes.
@@ -65,7 +73,16 @@ func ExtractEntities(pbfFile string, filter Filter) (Entities, error) {
 		Ways:      make(map[int64]Way),
 		Relations: make(map[int64]Relation),
 	}
-	err := entities.fillInMatches(pbfFile, filter)
-	entities.memo = nil // Free up memory before returning the entities.
-	return entities, err
+	extractor := entityExtractor{
+		entities:     entities,
+		memo:         primitiveGroupMemo{},
+		decompressor: util.NewDecompressor(),
+	}
+	defer extractor.close()
+	err := extractor.fillInMatches(pbfFile, filter)
+	return extractor.entities, err
+}
+
+func (e *entityExtractor) close() {
+	e.decompressor.Close()
 }
