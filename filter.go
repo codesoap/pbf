@@ -353,7 +353,7 @@ func extractWays(b *pbfproto.PrimitiveBlock, group *pbfproto.PrimitiveGroup, rea
 				realNodeID += node
 				nodes[i] = realNodeID
 			}
-			tags := make(map[string]string)
+			tags := make(map[string]string, len(way.Keys))
 			for i, iKey := range way.Keys {
 				key := string(b.Stringtable.S[iKey])
 				val := string(b.Stringtable.S[way.Vals[i]])
@@ -395,7 +395,7 @@ func extractRelations(b *pbfproto.PrimitiveBlock, group *pbfproto.PrimitiveGroup
 			relations: childRelations,
 		}
 		if !isIrrelevantRelation(newRelation, nodes, ways, excludePartial) {
-			tags := make(map[string]string)
+			tags := make(map[string]string, len(relation.Keys))
 			for i, iKey := range relation.Keys {
 				key := string(b.Stringtable.S[iKey])
 				val := string(b.Stringtable.S[relation.Vals[i]])
