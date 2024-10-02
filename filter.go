@@ -329,7 +329,6 @@ func extractWays(b *pbfproto.PrimitiveBlock, group *pbfproto.PrimitiveGroup, rea
 	rawWays := group.Ways
 	ways := make([]Way, 0)
 	for _, way := range rawWays {
-		nodes := make([]int64, len(way.Refs))
 		wayIsRelevant := false
 		var realNodeID int64
 		for i, node := range way.Refs {
@@ -339,7 +338,6 @@ func extractWays(b *pbfproto.PrimitiveBlock, group *pbfproto.PrimitiveGroup, rea
 			} else {
 				gi.maxWayID = realNodeID
 			}
-			nodes[i] = realNodeID
 			if !wayIsRelevant {
 				_, wayIsRelevant = realNodes[realNodeID]
 				if excludePartial && !wayIsRelevant {
@@ -348,6 +346,13 @@ func extractWays(b *pbfproto.PrimitiveBlock, group *pbfproto.PrimitiveGroup, rea
 			}
 		}
 		if wayIsRelevant {
+			nodes := make([]int64, len(way.Refs))
+			for i, node := range way.Refs {
+				// The nodes slice is only created now to save
+				// memory on irrelevant ways.
+				realNodeID += node
+				nodes[i] = realNodeID
+			}
 			tags := make(map[string]string)
 			for i, iKey := range way.Keys {
 				key := string(b.Stringtable.S[iKey])
