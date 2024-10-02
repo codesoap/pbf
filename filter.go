@@ -140,6 +140,7 @@ func feedBlobs(file *os.File, dataDecoder *lineworker.WorkerPool[blob, block], e
 
 func ensureCompatibility(b *pbfproto.Blob) error {
 	data, err := util.ToRawData(b)
+	defer util.ReturnToBlobPool(data)
 	if err != nil {
 		return fmt.Errorf("could not read blob data: %v", err)
 	}
@@ -201,6 +202,7 @@ func (e *Entities) fillInLocation(b block, filter Filter) error {
 
 func extractBlock(b *pbfproto.Blob) (*pbfproto.PrimitiveBlock, error) {
 	data, err := util.ToRawData(b)
+	defer util.ReturnToBlobPool(data)
 	if err != nil {
 		return nil, fmt.Errorf("could not read blob data: %v", err)
 	}
