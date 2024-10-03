@@ -446,20 +446,20 @@ func isIrrelevantRelation(relation Relation, nodes map[int64]Node, ways map[int6
 // reference a "physical" relation (one which only contains ways and/or
 // nodes) in entities.Relations directly or indirectly.
 func (e *Entities) removeUndesiredSuperRelations(excludePartial bool) error {
-	relationsToCheck := make([]int64, 0)
+	relationsToCheck := make(map[int64]struct{})
 	for id, relation := range e.Relations {
 		if len(relation.relations) > 0 {
-			relationsToCheck = append(relationsToCheck, id)
+			relationsToCheck[id] = struct{}{}
 		}
 	}
 	for len(relationsToCheck) > 0 {
-		remainingRelationsToCheck := make([]int64, 0)
-		for _, relationID := range relationsToCheck {
+		remainingRelationsToCheck := make(map[int64]struct{})
+		for relationID := range relationsToCheck {
 			relation := e.Relations[relationID]
 			canCheck := true
 			for _, childRelation := range relation.relations {
-				if slices.Contains(relationsToCheck, childRelation) {
-					remainingRelationsToCheck = append(remainingRelationsToCheck, relationID)
+				if _, ok := relationsToCheck[childRelation]; ok {
+					remainingRelationsToCheck[relationID] = struct{}{}
 					canCheck = false
 					break
 				}
