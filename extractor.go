@@ -1,6 +1,10 @@
 package pbf
 
-import "github.com/codesoap/pbf/util"
+import (
+	"fmt"
+
+	"github.com/codesoap/pbf/util"
+)
 
 //go:generate protoc fileformat.proto --go_out=. --go-vtproto_out=. --go-vtproto_opt=features=unmarshal
 //go:generate protoc osmformat.proto --go_out=. --go-vtproto_out=. --go-vtproto_opt=features=unmarshal+pool --go-vtproto_opt=pool=./pbfproto.PrimitiveBlock --go-vtproto_opt=pool=./pbfproto.PrimitiveGroup --go-vtproto_opt=pool=./pbfproto.StringTable --go-vtproto_opt=pool=./pbfproto.Way --go-vtproto_opt=pool=./pbfproto.DenseNodes --go-vtproto_opt=pool=./pbfproto.Node --go-vtproto_opt=pool=./pbfproto.Relation
@@ -78,11 +82,13 @@ func ExtractEntities(pbfFile string, filter Filter) (Entities, error) {
 		memo:         primitiveGroupMemo{},
 		decompressor: util.NewDecompressor(),
 	}
-	defer extractor.close()
 	err := extractor.fillInMatches(pbfFile, filter)
+	if e := extractor.close(); e != nil && err == nil {
+		err = fmt.Errorf("could not close extractor: %v", e)
+	}
 	return extractor.entities, err
 }
 
-func (e *entityExtractor) close() {
-	e.decompressor.Close()
+func (e *entityExtractor) close() error {
+	return e.decompressor.Close()
 }
