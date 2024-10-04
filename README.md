@@ -7,8 +7,9 @@ It performs reasonably well when working with
 OSM extracts, such as the ones obtained from
 [download.geofabrik.de](https://download.geofabrik.de/). With modest
 hardware (e.g. an old ThinkPad T480) PBF files can be read at roughly
-80MiB/s to 200MiB/s. When reading through an extract of the Czech
-Republic (828MiB), roughly 400MiB of RAM are used.
+80MiB/s to 300MiB/s. When reading through an extract of the Czech
+Republic (828MiB), roughly 320MiB of RAM are used (but this will depend
+on the amount of cores on your CPU).
 
 Performance can be improved, by changing the compression
 inside PBF files to zstd. This can be done with the [zstd-pbf
